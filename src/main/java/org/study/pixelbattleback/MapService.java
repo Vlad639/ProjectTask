@@ -11,8 +11,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 
 @Service
 public class MapService {
@@ -24,9 +24,9 @@ public class MapService {
 
     private final int height;
 
-    private final int[] colors;
+    private final AtomicIntegerArray colors;
 
-    private boolean isChanged;
+    private volatile boolean isChanged;
 
     /**
      * Пытаемся загрузить карту из файла на старте, или же начинаем с пустой карты
@@ -45,7 +45,7 @@ public class MapService {
         }
         width = tmp.getWidth();
         height = tmp.getHeight();
-        colors = tmp.getColors();
+        colors = new AtomicIntegerArray(tmp.getColors());
     }
 
     /**
@@ -54,13 +54,13 @@ public class MapService {
      * @param pixel
      * @return
      */
-    public synchronized boolean draw(PixelRequest pixel) {
+    public boolean draw(PixelRequest pixel) {
         int x = pixel.getX();
         int y = pixel.getY();
         if (x < 0 || x >= width || y < 0 || y >= height) {
             return false;
         }
-        colors[y * width + x] = pixel.getColor();
+        colors.set(y * width + x, pixel.getColor());
         isChanged = true;
         return true;
     }
@@ -71,7 +71,11 @@ public class MapService {
      * @return
      */
     private synchronized int[] getColors() {
-        return Arrays.copyOf(colors, colors.length);
+        int[] result = new int[width * height];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = colors.get(i);
+        }
+        return result;
     }
 
     public Map getMap() {
